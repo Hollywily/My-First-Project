@@ -1,110 +1,56 @@
-import type { Signer } from '../cryptography/keypair.js';
-import { PublicKey } from '../cryptography/publickey.js';
-import type { SignatureScheme } from '../cryptography/signature-scheme.js';
-import type { SuiGraphQLClient } from '../graphql/client.js';
-import { MultiSigSigner } from './signer.js';
-type CompressedSignature = {
-    ED25519: number[];
-} | {
-    Secp256k1: number[];
-} | {
-    Secp256r1: number[];
-} | {
-    ZkLogin: number[];
-};
-type PublicKeyEnum = {
-    ED25519: number[];
-} | {
-    Secp256k1: number[];
-} | {
-    Secp256r1: number[];
-} | {
-    ZkLogin: number[];
-};
-type PubkeyEnumWeightPair = {
-    pubKey: PublicKeyEnum;
-    weight: number;
-};
-type MultiSigPublicKeyStruct = {
-    pk_map: PubkeyEnumWeightPair[];
-    threshold: number;
-};
-export type MultiSigStruct = {
-    sigs: CompressedSignature[];
-    bitmap: number;
-    multisig_pk: MultiSigPublicKeyStruct;
-};
-type ParsedPartialMultiSigSignature = {
-    signatureScheme: SignatureScheme;
-    signature: Uint8Array;
-    publicKey: PublicKey;
-    weight: number;
-};
-export declare const MAX_SIGNER_IN_MULTISIG = 10;
-export declare const MIN_SIGNER_IN_MULTISIG = 1;
+import type { IntentScope } from './intent.js';
 /**
- * A MultiSig public key
+ * Value to be converted into public key.
  */
-export declare class MultiSigPublicKey extends PublicKey {
-    private rawBytes;
-    private multisigPublicKey;
-    private publicKeys;
+export type PublicKeyInitData = string | Uint8Array | Iterable<number>;
+export declare function bytesEqual(a: Uint8Array, b: Uint8Array): boolean;
+/**
+ * A public key
+ */
+export declare abstract class PublicKey {
     /**
-     * Create a new MultiSigPublicKey object
+     * Checks if two public keys are equal
      */
-    constructor(
+    equals(publicKey: PublicKey): boolean;
     /**
-     *  MultiSig public key as buffer or base-64 encoded string
+     * Return the base-64 representation of the public key
      */
-    value: string | Uint8Array | MultiSigPublicKeyStruct, options?: {
-        client?: SuiGraphQLClient;
-    });
+    toBase64(): string;
+    toString(): never;
     /**
-     * 	A static method to create a new MultiSig publickey instance from a set of public keys and their associated weights pairs and threshold.
+     * Return the Sui representation of the public key encoded in
+     * base-64. A Sui public key is formed by the concatenation
+     * of the scheme flag with the raw bytes of the public key
      */
-    static fromPublicKeys({ threshold, publicKeys, }: {
-        threshold: number;
-        publicKeys: {
-            publicKey: PublicKey;
-            weight: number;
-        }[];
-    }): MultiSigPublicKey;
+    toSuiPublicKey(): string;
+    verifyWithIntent(bytes: Uint8Array, signature: Uint8Array | string, intent: IntentScope): Promise<boolean>;
     /**
-     * Checks if two MultiSig public keys are equal
+     * Verifies that the signature is valid for for the provided PersonalMessage
      */
-    equals(publicKey: MultiSigPublicKey): boolean;
+    verifyPersonalMessage(message: Uint8Array, signature: Uint8Array | string): Promise<boolean>;
     /**
-     * Return the byte array representation of the MultiSig public key
+     * Verifies that the signature is valid for for the provided Transaction
      */
-    toRawBytes(): Uint8Array;
-    getPublicKeys(): {
-        weight: number;
-        publicKey: PublicKey;
-    }[];
-    getThreshold(): number;
-    getSigner(...signers: [signer: Signer]): MultiSigSigner;
+    verifyTransaction(transaction: Uint8Array, signature: Uint8Array | string): Promise<boolean>;
     /**
-     * Return the Sui address associated with this MultiSig public key
+     * Returns the bytes representation of the public key
+     * prefixed with the signature scheme flag
+     */
+    toSuiBytes(): Uint8Array;
+    /**
+     * Return the Sui address associated with this Ed25519 public key
      */
     toSuiAddress(): string;
     /**
-     * Return the Sui address associated with this MultiSig public key
+     * Return the byte array representation of the public key
      */
-    flag(): number;
+    abstract toRawBytes(): Uint8Array;
+    /**
+     * Return signature scheme flag of the public key
+     */
+    abstract flag(): number;
     /**
      * Verifies that the signature is valid for for the provided message
      */
-    verify(message: Uint8Array, multisigSignature: string): Promise<boolean>;
-    /**
-     * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
-     * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
-     */
-    combinePartialSignatures(signatures: string[]): string;
+    abstract verify(data: Uint8Array, signature: Uint8Array | string): Promise<boolean>;
 }
-/**
- * Parse multisig structure into an array of individual signatures: signature scheme, the actual individual signature, public key and its weight.
- */
-export declare function parsePartialSignatures(multisig: MultiSigStruct, options?: {
-    client?: SuiGraphQLClient;
-}): ParsedPartialMultiSigSignature[];
-export {};

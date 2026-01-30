@@ -18,243 +18,94 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var publickey_exports = {};
 __export(publickey_exports, {
-  MAX_SIGNER_IN_MULTISIG: () => MAX_SIGNER_IN_MULTISIG,
-  MIN_SIGNER_IN_MULTISIG: () => MIN_SIGNER_IN_MULTISIG,
-  MultiSigPublicKey: () => MultiSigPublicKey,
-  parsePartialSignatures: () => parsePartialSignatures
+  PublicKey: () => PublicKey,
+  bytesEqual: () => bytesEqual
 });
 module.exports = __toCommonJS(publickey_exports);
 var import_bcs = require("@mysten/bcs");
 var import_blake2b = require("@noble/hashes/blake2b");
 var import_utils = require("@noble/hashes/utils");
 var import_bcs2 = require("../bcs/index.js");
-var import_publickey = require("../cryptography/publickey.js");
-var import_signature_scheme = require("../cryptography/signature-scheme.js");
-var import_signature = require("../cryptography/signature.js");
 var import_sui_types = require("../utils/sui-types.js");
-var import_verify = require("../verify/index.js");
-var import_publickey2 = require("../zklogin/publickey.js");
-var import_signer = require("./signer.js");
-const MAX_SIGNER_IN_MULTISIG = 10;
-const MIN_SIGNER_IN_MULTISIG = 1;
-class MultiSigPublicKey extends import_publickey.PublicKey {
-  /**
-   * Create a new MultiSigPublicKey object
-   */
-  constructor(value, options = {}) {
-    super();
-    if (typeof value === "string") {
-      this.rawBytes = (0, import_bcs.fromB64)(value);
-      this.multisigPublicKey = import_bcs2.bcs.MultiSigPublicKey.parse(this.rawBytes);
-    } else if (value instanceof Uint8Array) {
-      this.rawBytes = value;
-      this.multisigPublicKey = import_bcs2.bcs.MultiSigPublicKey.parse(this.rawBytes);
-    } else {
-      this.multisigPublicKey = value;
-      this.rawBytes = import_bcs2.bcs.MultiSigPublicKey.serialize(value).toBytes();
-    }
-    if (this.multisigPublicKey.threshold < 1) {
-      throw new Error("Invalid threshold");
-    }
-    const seenPublicKeys = /* @__PURE__ */ new Set();
-    this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
-      const [scheme, bytes] = Object.entries(pubKey).filter(([name]) => name !== "$kind")[0];
-      const publicKeyStr = Uint8Array.from(bytes).toString();
-      if (seenPublicKeys.has(publicKeyStr)) {
-        throw new Error(`Multisig does not support duplicate public keys`);
-      }
-      seenPublicKeys.add(publicKeyStr);
-      if (weight < 1) {
-        throw new Error(`Invalid weight`);
-      }
-      return {
-        publicKey: (0, import_verify.publicKeyFromRawBytes)(scheme, Uint8Array.from(bytes), options),
-        weight
-      };
-    });
-    const totalWeight = this.publicKeys.reduce((sum, { weight }) => sum + weight, 0);
-    if (this.multisigPublicKey.threshold > totalWeight) {
-      throw new Error(`Unreachable threshold`);
-    }
-    if (this.publicKeys.length > MAX_SIGNER_IN_MULTISIG) {
-      throw new Error(`Max number of signers in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
-    }
-    if (this.publicKeys.length < MIN_SIGNER_IN_MULTISIG) {
-      throw new Error(`Min number of signers in a multisig is ${MIN_SIGNER_IN_MULTISIG}`);
-    }
+var import_intent = require("./intent.js");
+function bytesEqual(a, b) {
+  if (a === b) return true;
+  if (a.length !== b.length) {
+    return false;
   }
-  /**
-   * 	A static method to create a new MultiSig publickey instance from a set of public keys and their associated weights pairs and threshold.
-   */
-  static fromPublicKeys({
-    threshold,
-    publicKeys
-  }) {
-    return new MultiSigPublicKey({
-      pk_map: publicKeys.map(({ publicKey, weight }) => {
-        const scheme = import_signature_scheme.SIGNATURE_FLAG_TO_SCHEME[publicKey.flag()];
-        return {
-          pubKey: { [scheme]: Array.from(publicKey.toRawBytes()) },
-          weight
-        };
-      }),
-      threshold
-    });
-  }
-  /**
-   * Checks if two MultiSig public keys are equal
-   */
-  equals(publicKey) {
-    return super.equals(publicKey);
-  }
-  /**
-   * Return the byte array representation of the MultiSig public key
-   */
-  toRawBytes() {
-    return this.rawBytes;
-  }
-  getPublicKeys() {
-    return this.publicKeys;
-  }
-  getThreshold() {
-    return this.multisigPublicKey.threshold;
-  }
-  getSigner(...signers) {
-    return new import_signer.MultiSigSigner(this, signers);
-  }
-  /**
-   * Return the Sui address associated with this MultiSig public key
-   */
-  toSuiAddress() {
-    const maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
-    const tmp = new Uint8Array(maxLength);
-    tmp.set([import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"]]);
-    tmp.set(import_bcs2.bcs.u16().serialize(this.multisigPublicKey.threshold).toBytes(), 1);
-    let i = 3;
-    for (const { publicKey, weight } of this.publicKeys) {
-      const bytes = publicKey.toSuiBytes();
-      tmp.set(bytes, i);
-      i += bytes.length;
-      tmp.set([weight], i++);
-    }
-    return (0, import_sui_types.normalizeSuiAddress)((0, import_utils.bytesToHex)((0, import_blake2b.blake2b)(tmp.slice(0, i), { dkLen: 32 })));
-  }
-  /**
-   * Return the Sui address associated with this MultiSig public key
-   */
-  flag() {
-    return import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"];
-  }
-  /**
-   * Verifies that the signature is valid for for the provided message
-   */
-  async verify(message, multisigSignature) {
-    const parsed = (0, import_signature.parseSerializedSignature)(multisigSignature);
-    if (parsed.signatureScheme !== "MultiSig") {
-      throw new Error("Invalid signature scheme");
-    }
-    const { multisig } = parsed;
-    let signatureWeight = 0;
-    if (!(0, import_publickey.bytesEqual)(
-      import_bcs2.bcs.MultiSigPublicKey.serialize(this.multisigPublicKey).toBytes(),
-      import_bcs2.bcs.MultiSigPublicKey.serialize(multisig.multisig_pk).toBytes()
-    )) {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
       return false;
     }
-    for (const { publicKey, weight, signature } of parsePartialSignatures(multisig)) {
-      if (!await publicKey.verify(message, signature)) {
-        return false;
-      }
-      signatureWeight += weight;
-    }
-    return signatureWeight >= this.multisigPublicKey.threshold;
+  }
+  return true;
+}
+class PublicKey {
+  /**
+   * Checks if two public keys are equal
+   */
+  equals(publicKey) {
+    return bytesEqual(this.toRawBytes(), publicKey.toRawBytes());
   }
   /**
-   * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
-   * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
+   * Return the base-64 representation of the public key
    */
-  combinePartialSignatures(signatures) {
-    if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
-      throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
-    }
-    let bitmap = 0;
-    const compressedSignatures = new Array(signatures.length);
-    for (let i = 0; i < signatures.length; i++) {
-      let parsed = (0, import_signature.parseSerializedSignature)(signatures[i]);
-      if (parsed.signatureScheme === "MultiSig") {
-        throw new Error("MultiSig is not supported inside MultiSig");
-      }
-      let publicKey;
-      if (parsed.signatureScheme === "ZkLogin") {
-        publicKey = (0, import_publickey2.toZkLoginPublicIdentifier)(
-          parsed.zkLogin?.addressSeed,
-          parsed.zkLogin?.iss
-        ).toRawBytes();
-      } else {
-        publicKey = parsed.publicKey;
-      }
-      compressedSignatures[i] = {
-        [parsed.signatureScheme]: Array.from(parsed.signature.map((x) => Number(x)))
-      };
-      let publicKeyIndex;
-      for (let j = 0; j < this.publicKeys.length; j++) {
-        if ((0, import_publickey.bytesEqual)(publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
-          if (bitmap & 1 << j) {
-            throw new Error("Received multiple signatures from the same public key");
-          }
-          publicKeyIndex = j;
-          break;
-        }
-      }
-      if (publicKeyIndex === void 0) {
-        throw new Error("Received signature from unknown public key");
-      }
-      bitmap |= 1 << publicKeyIndex;
-    }
-    let multisig = {
-      sigs: compressedSignatures,
-      bitmap,
-      multisig_pk: this.multisigPublicKey
-    };
-    const bytes = import_bcs2.bcs.MultiSig.serialize(multisig, { maxSize: 8192 }).toBytes();
-    let tmp = new Uint8Array(bytes.length + 1);
-    tmp.set([import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"]]);
-    tmp.set(bytes, 1);
-    return (0, import_bcs.toB64)(tmp);
+  toBase64() {
+    return (0, import_bcs.toB64)(this.toRawBytes());
   }
-}
-function parsePartialSignatures(multisig, options = {}) {
-  let res = new Array(multisig.sigs.length);
-  for (let i = 0; i < multisig.sigs.length; i++) {
-    const [signatureScheme, signature] = Object.entries(multisig.sigs[i]).filter(
-      ([name]) => name !== "$kind"
-    )[0];
-    const pkIndex = asIndices(multisig.bitmap).at(i);
-    const pair = multisig.multisig_pk.pk_map[pkIndex];
-    const pkBytes = Uint8Array.from(Object.values(pair.pubKey)[0]);
-    if (signatureScheme === "MultiSig") {
-      throw new Error("MultiSig is not supported inside MultiSig");
-    }
-    const publicKey = (0, import_verify.publicKeyFromRawBytes)(signatureScheme, pkBytes, options);
-    res[i] = {
-      signatureScheme,
-      signature: Uint8Array.from(signature),
-      publicKey,
-      weight: pair.weight
-    };
+  toString() {
+    throw new Error(
+      "`toString` is not implemented on public keys. Use `toBase64()` or `toRawBytes()` instead."
+    );
   }
-  return res;
-}
-function asIndices(bitmap) {
-  if (bitmap < 0 || bitmap > 1024) {
-    throw new Error("Invalid bitmap");
+  /**
+   * Return the Sui representation of the public key encoded in
+   * base-64. A Sui public key is formed by the concatenation
+   * of the scheme flag with the raw bytes of the public key
+   */
+  toSuiPublicKey() {
+    const bytes = this.toSuiBytes();
+    return (0, import_bcs.toB64)(bytes);
   }
-  let res = [];
-  for (let i = 0; i < 10; i++) {
-    if ((bitmap & 1 << i) !== 0) {
-      res.push(i);
-    }
+  verifyWithIntent(bytes, signature, intent) {
+    const intentMessage = (0, import_intent.messageWithIntent)(intent, bytes);
+    const digest = (0, import_blake2b.blake2b)(intentMessage, { dkLen: 32 });
+    return this.verify(digest, signature);
   }
-  return Uint8Array.from(res);
+  /**
+   * Verifies that the signature is valid for for the provided PersonalMessage
+   */
+  verifyPersonalMessage(message, signature) {
+    return this.verifyWithIntent(
+      import_bcs2.bcs.vector(import_bcs2.bcs.u8()).serialize(message).toBytes(),
+      signature,
+      "PersonalMessage"
+    );
+  }
+  /**
+   * Verifies that the signature is valid for for the provided Transaction
+   */
+  verifyTransaction(transaction, signature) {
+    return this.verifyWithIntent(transaction, signature, "TransactionData");
+  }
+  /**
+   * Returns the bytes representation of the public key
+   * prefixed with the signature scheme flag
+   */
+  toSuiBytes() {
+    const rawBytes = this.toRawBytes();
+    const suiBytes = new Uint8Array(rawBytes.length + 1);
+    suiBytes.set([this.flag()]);
+    suiBytes.set(rawBytes, 1);
+    return suiBytes;
+  }
+  /**
+   * Return the Sui address associated with this Ed25519 public key
+   */
+  toSuiAddress() {
+    return (0, import_sui_types.normalizeSuiAddress)(
+      (0, import_utils.bytesToHex)((0, import_blake2b.blake2b)(this.toSuiBytes(), { dkLen: 32 })).slice(0, import_sui_types.SUI_ADDRESS_LENGTH * 2)
+    );
+  }
 }
 //# sourceMappingURL=publickey.js.map

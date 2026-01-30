@@ -17,20 +17,15 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __reExport = (target, mod, secondTarget) => (__copyProps(target, mod, "default"), secondTarget && __copyProps(secondTarget, mod, "default"));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var client_exports = {};
-__export(client_exports, {
-  JsonRpcError: () => import_errors.JsonRpcError,
-  SuiClient: () => import_client.SuiClient,
-  SuiHTTPStatusError: () => import_errors.SuiHTTPStatusError,
-  SuiHTTPTransport: () => import_http_transport.SuiHTTPTransport,
-  SuiHTTPTransportError: () => import_errors.SuiHTTPTransportError,
-  getFullnodeUrl: () => import_network.getFullnodeUrl,
-  isSuiClient: () => import_client.isSuiClient
+var __exports = {};
+__export(__exports, {
+  graphql: () => graphql,
+  maskFragments: () => import_gql2.maskFragments,
+  readFragment: () => import_gql2.readFragment
 });
-module.exports = __toCommonJS(client_exports);
-var import_http_transport = require("./http-transport.js");
-var import_network = require("./network.js");
-__reExport(client_exports, require("./types/index.js"), module.exports);
-var import_client = require("./client.js");
-var import_errors = require("./errors.js");
+module.exports = __toCommonJS(__exports);
+var import_gql = require("gql.tada");
+__reExport(__exports, require("../../types.js"), module.exports);
+var import_gql2 = require("gql.tada");
+const graphql = (0, import_gql.initGraphQLTada)();
 //# sourceMappingURL=index.js.map
