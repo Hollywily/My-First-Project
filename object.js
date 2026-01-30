@@ -16,13 +16,19 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var multisig_exports = {};
-__export(multisig_exports, {
-  MultiSigPublicKey: () => import_publickey.MultiSigPublicKey,
-  MultiSigSigner: () => import_signer.MultiSigSigner,
-  parsePartialSignatures: () => import_publickey.parsePartialSignatures
+var object_exports = {};
+__export(object_exports, {
+  createObjectMethods: () => createObjectMethods
 });
-module.exports = __toCommonJS(multisig_exports);
-var import_signer = require("./signer.js");
-var import_publickey = require("./publickey.js");
-//# sourceMappingURL=index.js.map
+module.exports = __toCommonJS(object_exports);
+function createObjectMethods(makeObject) {
+  function object(value) {
+    return makeObject(value);
+  }
+  object.system = () => object("0x5");
+  object.clock = () => object("0x6");
+  object.random = () => object("0x8");
+  object.denyList = () => object("0x403");
+  return object;
+}
+//# sourceMappingURL=object.js.map

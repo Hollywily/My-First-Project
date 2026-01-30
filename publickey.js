@@ -3,9 +3,6 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __typeError = (msg) => {
-  throw TypeError(msg);
-};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -19,169 +16,245 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var __accessCheck = (obj, member, msg) => member.has(obj) || __typeError("Cannot " + msg);
-var __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read from private field"), getter ? getter.call(obj) : member.get(obj));
-var __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot add the same private member more than once") : member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
-var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
 var publickey_exports = {};
 __export(publickey_exports, {
-  ZkLoginPublicIdentifier: () => ZkLoginPublicIdentifier,
-  parseSerializedZkLoginSignature: () => parseSerializedZkLoginSignature,
-  toZkLoginPublicIdentifier: () => toZkLoginPublicIdentifier
+  MAX_SIGNER_IN_MULTISIG: () => MAX_SIGNER_IN_MULTISIG,
+  MIN_SIGNER_IN_MULTISIG: () => MIN_SIGNER_IN_MULTISIG,
+  MultiSigPublicKey: () => MultiSigPublicKey,
+  parsePartialSignatures: () => parsePartialSignatures
 });
 module.exports = __toCommonJS(publickey_exports);
 var import_bcs = require("@mysten/bcs");
+var import_blake2b = require("@noble/hashes/blake2b");
+var import_utils = require("@noble/hashes/utils");
+var import_bcs2 = require("../bcs/index.js");
 var import_publickey = require("../cryptography/publickey.js");
 var import_signature_scheme = require("../cryptography/signature-scheme.js");
-var import_client = require("../graphql/client.js");
-var import__ = require("../graphql/schemas/2024.4/index.js");
-var import_jwt_utils = require("./jwt-utils.js");
-var import_signature = require("./signature.js");
-var import_utils = require("./utils.js");
-var _data, _client;
-const _ZkLoginPublicIdentifier = class _ZkLoginPublicIdentifier extends import_publickey.PublicKey {
+var import_signature = require("../cryptography/signature.js");
+var import_sui_types = require("../utils/sui-types.js");
+var import_verify = require("../verify/index.js");
+var import_publickey2 = require("../zklogin/publickey.js");
+var import_signer = require("./signer.js");
+const MAX_SIGNER_IN_MULTISIG = 10;
+const MIN_SIGNER_IN_MULTISIG = 1;
+class MultiSigPublicKey extends import_publickey.PublicKey {
   /**
-   * Create a new ZkLoginPublicIdentifier object
-   * @param value zkLogin public identifier as buffer or base-64 encoded string
+   * Create a new MultiSigPublicKey object
    */
-  constructor(value, { client } = {}) {
+  constructor(value, options = {}) {
     super();
-    __privateAdd(this, _data);
-    __privateAdd(this, _client);
-    __privateSet(this, _client, client);
     if (typeof value === "string") {
-      __privateSet(this, _data, (0, import_bcs.fromB64)(value));
+      this.rawBytes = (0, import_bcs.fromB64)(value);
+      this.multisigPublicKey = import_bcs2.bcs.MultiSigPublicKey.parse(this.rawBytes);
     } else if (value instanceof Uint8Array) {
-      __privateSet(this, _data, value);
+      this.rawBytes = value;
+      this.multisigPublicKey = import_bcs2.bcs.MultiSigPublicKey.parse(this.rawBytes);
     } else {
-      __privateSet(this, _data, Uint8Array.from(value));
+      this.multisigPublicKey = value;
+      this.rawBytes = import_bcs2.bcs.MultiSigPublicKey.serialize(value).toBytes();
+    }
+    if (this.multisigPublicKey.threshold < 1) {
+      throw new Error("Invalid threshold");
+    }
+    const seenPublicKeys = /* @__PURE__ */ new Set();
+    this.publicKeys = this.multisigPublicKey.pk_map.map(({ pubKey, weight }) => {
+      const [scheme, bytes] = Object.entries(pubKey).filter(([name]) => name !== "$kind")[0];
+      const publicKeyStr = Uint8Array.from(bytes).toString();
+      if (seenPublicKeys.has(publicKeyStr)) {
+        throw new Error(`Multisig does not support duplicate public keys`);
+      }
+      seenPublicKeys.add(publicKeyStr);
+      if (weight < 1) {
+        throw new Error(`Invalid weight`);
+      }
+      return {
+        publicKey: (0, import_verify.publicKeyFromRawBytes)(scheme, Uint8Array.from(bytes), options),
+        weight
+      };
+    });
+    const totalWeight = this.publicKeys.reduce((sum, { weight }) => sum + weight, 0);
+    if (this.multisigPublicKey.threshold > totalWeight) {
+      throw new Error(`Unreachable threshold`);
+    }
+    if (this.publicKeys.length > MAX_SIGNER_IN_MULTISIG) {
+      throw new Error(`Max number of signers in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
+    }
+    if (this.publicKeys.length < MIN_SIGNER_IN_MULTISIG) {
+      throw new Error(`Min number of signers in a multisig is ${MIN_SIGNER_IN_MULTISIG}`);
     }
   }
   /**
-   * Checks if two zkLogin public identifiers are equal
+   * 	A static method to create a new MultiSig publickey instance from a set of public keys and their associated weights pairs and threshold.
+   */
+  static fromPublicKeys({
+    threshold,
+    publicKeys
+  }) {
+    return new MultiSigPublicKey({
+      pk_map: publicKeys.map(({ publicKey, weight }) => {
+        const scheme = import_signature_scheme.SIGNATURE_FLAG_TO_SCHEME[publicKey.flag()];
+        return {
+          pubKey: { [scheme]: Array.from(publicKey.toRawBytes()) },
+          weight
+        };
+      }),
+      threshold
+    });
+  }
+  /**
+   * Checks if two MultiSig public keys are equal
    */
   equals(publicKey) {
     return super.equals(publicKey);
   }
   /**
-   * Return the byte array representation of the zkLogin public identifier
+   * Return the byte array representation of the MultiSig public key
    */
   toRawBytes() {
-    return __privateGet(this, _data);
+    return this.rawBytes;
+  }
+  getPublicKeys() {
+    return this.publicKeys;
+  }
+  getThreshold() {
+    return this.multisigPublicKey.threshold;
+  }
+  getSigner(...signers) {
+    return new import_signer.MultiSigSigner(this, signers);
   }
   /**
-   * Return the Sui address associated with this ZkLogin public identifier
+   * Return the Sui address associated with this MultiSig public key
+   */
+  toSuiAddress() {
+    const maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
+    const tmp = new Uint8Array(maxLength);
+    tmp.set([import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"]]);
+    tmp.set(import_bcs2.bcs.u16().serialize(this.multisigPublicKey.threshold).toBytes(), 1);
+    let i = 3;
+    for (const { publicKey, weight } of this.publicKeys) {
+      const bytes = publicKey.toSuiBytes();
+      tmp.set(bytes, i);
+      i += bytes.length;
+      tmp.set([weight], i++);
+    }
+    return (0, import_sui_types.normalizeSuiAddress)((0, import_utils.bytesToHex)((0, import_blake2b.blake2b)(tmp.slice(0, i), { dkLen: 32 })));
+  }
+  /**
+   * Return the Sui address associated with this MultiSig public key
    */
   flag() {
-    return import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["ZkLogin"];
+    return import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"];
   }
   /**
    * Verifies that the signature is valid for for the provided message
    */
-  async verify(_message, _signature) {
-    throw Error("does not support");
-  }
-  /**
-   * Verifies that the signature is valid for for the provided PersonalMessage
-   */
-  verifyPersonalMessage(message, signature) {
-    const parsedSignature = parseSerializedZkLoginSignature(signature);
-    const address = new _ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
-    return graphqlVerifyZkLoginSignature({
-      address,
-      bytes: (0, import_bcs.toB64)(message),
-      signature: parsedSignature.serializedSignature,
-      intentScope: "PERSONAL_MESSAGE",
-      client: __privateGet(this, _client)
-    });
-  }
-  /**
-   * Verifies that the signature is valid for for the provided Transaction
-   */
-  verifyTransaction(transaction, signature) {
-    const parsedSignature = parseSerializedZkLoginSignature(signature);
-    const address = new _ZkLoginPublicIdentifier(parsedSignature.publicKey).toSuiAddress();
-    return graphqlVerifyZkLoginSignature({
-      address,
-      bytes: (0, import_bcs.toB64)(transaction),
-      signature: parsedSignature.serializedSignature,
-      intentScope: "TRANSACTION_DATA",
-      client: __privateGet(this, _client)
-    });
-  }
-};
-_data = new WeakMap();
-_client = new WeakMap();
-let ZkLoginPublicIdentifier = _ZkLoginPublicIdentifier;
-function toZkLoginPublicIdentifier(addressSeed, iss, options) {
-  const addressSeedBytesBigEndian = (0, import_utils.toPaddedBigEndianBytes)(addressSeed, 32);
-  const issBytes = new TextEncoder().encode(iss);
-  const tmp = new Uint8Array(1 + issBytes.length + addressSeedBytesBigEndian.length);
-  tmp.set([issBytes.length], 0);
-  tmp.set(issBytes, 1);
-  tmp.set(addressSeedBytesBigEndian, 1 + issBytes.length);
-  return new ZkLoginPublicIdentifier(tmp, options);
-}
-const VerifyZkLoginSignatureQuery = (0, import__.graphql)(`
-	query Zklogin(
-		$bytes: Base64!
-		$signature: Base64!
-		$intentScope: ZkLoginIntentScope!
-		$author: SuiAddress!
-	) {
-		verifyZkloginSignature(
-			bytes: $bytes
-			signature: $signature
-			intentScope: $intentScope
-			author: $author
-		) {
-			success
-			errors
-		}
-	}
-`);
-async function graphqlVerifyZkLoginSignature({
-  address,
-  bytes,
-  signature,
-  intentScope,
-  client = new import_client.SuiGraphQLClient({
-    url: "https://sui-mainnet.mystenlabs.com/graphql"
-  })
-}) {
-  const resp = await client.query({
-    query: VerifyZkLoginSignatureQuery,
-    variables: {
-      bytes,
-      signature,
-      intentScope,
-      author: address
+  async verify(message, multisigSignature) {
+    const parsed = (0, import_signature.parseSerializedSignature)(multisigSignature);
+    if (parsed.signatureScheme !== "MultiSig") {
+      throw new Error("Invalid signature scheme");
     }
-  });
-  return resp.data?.verifyZkloginSignature.success === true && resp.data?.verifyZkloginSignature.errors.length === 0;
-}
-function parseSerializedZkLoginSignature(signature) {
-  const bytes = typeof signature === "string" ? (0, import_bcs.fromB64)(signature) : signature;
-  if (bytes[0] !== import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG.ZkLogin) {
-    throw new Error("Invalid signature scheme");
+    const { multisig } = parsed;
+    let signatureWeight = 0;
+    if (!(0, import_publickey.bytesEqual)(
+      import_bcs2.bcs.MultiSigPublicKey.serialize(this.multisigPublicKey).toBytes(),
+      import_bcs2.bcs.MultiSigPublicKey.serialize(multisig.multisig_pk).toBytes()
+    )) {
+      return false;
+    }
+    for (const { publicKey, weight, signature } of parsePartialSignatures(multisig)) {
+      if (!await publicKey.verify(message, signature)) {
+        return false;
+      }
+      signatureWeight += weight;
+    }
+    return signatureWeight >= this.multisigPublicKey.threshold;
   }
-  const signatureBytes = bytes.slice(1);
-  const { inputs, maxEpoch, userSignature } = (0, import_signature.parseZkLoginSignature)(signatureBytes);
-  const { issBase64Details, addressSeed } = inputs;
-  const iss = (0, import_jwt_utils.extractClaimValue)(issBase64Details, "iss");
-  const publicIdentifer = toZkLoginPublicIdentifier(BigInt(addressSeed), iss);
-  return {
-    serializedSignature: (0, import_bcs.toB64)(bytes),
-    signatureScheme: "ZkLogin",
-    zkLogin: {
-      inputs,
-      maxEpoch,
-      userSignature,
-      iss,
-      addressSeed: BigInt(addressSeed)
-    },
-    signature: bytes,
-    publicKey: publicIdentifer.toRawBytes()
-  };
+  /**
+   * Combines multiple partial signatures into a single multisig, ensuring that each public key signs only once
+   * and that all the public keys involved are known and valid, and then serializes multisig into the standard format
+   */
+  combinePartialSignatures(signatures) {
+    if (signatures.length > MAX_SIGNER_IN_MULTISIG) {
+      throw new Error(`Max number of signatures in a multisig is ${MAX_SIGNER_IN_MULTISIG}`);
+    }
+    let bitmap = 0;
+    const compressedSignatures = new Array(signatures.length);
+    for (let i = 0; i < signatures.length; i++) {
+      let parsed = (0, import_signature.parseSerializedSignature)(signatures[i]);
+      if (parsed.signatureScheme === "MultiSig") {
+        throw new Error("MultiSig is not supported inside MultiSig");
+      }
+      let publicKey;
+      if (parsed.signatureScheme === "ZkLogin") {
+        publicKey = (0, import_publickey2.toZkLoginPublicIdentifier)(
+          parsed.zkLogin?.addressSeed,
+          parsed.zkLogin?.iss
+        ).toRawBytes();
+      } else {
+        publicKey = parsed.publicKey;
+      }
+      compressedSignatures[i] = {
+        [parsed.signatureScheme]: Array.from(parsed.signature.map((x) => Number(x)))
+      };
+      let publicKeyIndex;
+      for (let j = 0; j < this.publicKeys.length; j++) {
+        if ((0, import_publickey.bytesEqual)(publicKey, this.publicKeys[j].publicKey.toRawBytes())) {
+          if (bitmap & 1 << j) {
+            throw new Error("Received multiple signatures from the same public key");
+          }
+          publicKeyIndex = j;
+          break;
+        }
+      }
+      if (publicKeyIndex === void 0) {
+        throw new Error("Received signature from unknown public key");
+      }
+      bitmap |= 1 << publicKeyIndex;
+    }
+    let multisig = {
+      sigs: compressedSignatures,
+      bitmap,
+      multisig_pk: this.multisigPublicKey
+    };
+    const bytes = import_bcs2.bcs.MultiSig.serialize(multisig, { maxSize: 8192 }).toBytes();
+    let tmp = new Uint8Array(bytes.length + 1);
+    tmp.set([import_signature_scheme.SIGNATURE_SCHEME_TO_FLAG["MultiSig"]]);
+    tmp.set(bytes, 1);
+    return (0, import_bcs.toB64)(tmp);
+  }
+}
+function parsePartialSignatures(multisig, options = {}) {
+  let res = new Array(multisig.sigs.length);
+  for (let i = 0; i < multisig.sigs.length; i++) {
+    const [signatureScheme, signature] = Object.entries(multisig.sigs[i]).filter(
+      ([name]) => name !== "$kind"
+    )[0];
+    const pkIndex = asIndices(multisig.bitmap).at(i);
+    const pair = multisig.multisig_pk.pk_map[pkIndex];
+    const pkBytes = Uint8Array.from(Object.values(pair.pubKey)[0]);
+    if (signatureScheme === "MultiSig") {
+      throw new Error("MultiSig is not supported inside MultiSig");
+    }
+    const publicKey = (0, import_verify.publicKeyFromRawBytes)(signatureScheme, pkBytes, options);
+    res[i] = {
+      signatureScheme,
+      signature: Uint8Array.from(signature),
+      publicKey,
+      weight: pair.weight
+    };
+  }
+  return res;
+}
+function asIndices(bitmap) {
+  if (bitmap < 0 || bitmap > 1024) {
+    throw new Error("Invalid bitmap");
+  }
+  let res = [];
+  for (let i = 0; i < 10; i++) {
+    if ((bitmap & 1 << i) !== 0) {
+      res.push(i);
+    }
+  }
+  return Uint8Array.from(res);
 }
 //# sourceMappingURL=publickey.js.map

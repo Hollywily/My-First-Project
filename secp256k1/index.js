@@ -16,13 +16,13 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var multisig_exports = {};
-__export(multisig_exports, {
-  MultiSigPublicKey: () => import_publickey.MultiSigPublicKey,
-  MultiSigSigner: () => import_signer.MultiSigSigner,
-  parsePartialSignatures: () => import_publickey.parsePartialSignatures
+var secp256k1_exports = {};
+__export(secp256k1_exports, {
+  DEFAULT_SECP256K1_DERIVATION_PATH: () => import_keypair.DEFAULT_SECP256K1_DERIVATION_PATH,
+  Secp256k1Keypair: () => import_keypair.Secp256k1Keypair,
+  Secp256k1PublicKey: () => import_publickey.Secp256k1PublicKey
 });
-module.exports = __toCommonJS(multisig_exports);
-var import_signer = require("./signer.js");
+module.exports = __toCommonJS(secp256k1_exports);
+var import_keypair = require("./keypair.js");
 var import_publickey = require("./publickey.js");
 //# sourceMappingURL=index.js.map

@@ -16,13 +16,20 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var multisig_exports = {};
-__export(multisig_exports, {
-  MultiSigPublicKey: () => import_publickey.MultiSigPublicKey,
-  MultiSigSigner: () => import_signer.MultiSigSigner,
-  parsePartialSignatures: () => import_publickey.parsePartialSignatures
+var Arguments_exports = {};
+__export(Arguments_exports, {
+  Arguments: () => Arguments
 });
-module.exports = __toCommonJS(multisig_exports);
-var import_signer = require("./signer.js");
-var import_publickey = require("./publickey.js");
-//# sourceMappingURL=index.js.map
+module.exports = __toCommonJS(Arguments_exports);
+var import_object = require("./object.js");
+var import_pure = require("./pure.js");
+const Arguments = {
+  pure: (0, import_pure.createPure)((value) => (tx) => tx.pure(value)),
+  object: (0, import_object.createObjectMethods)(
+    (value) => (tx) => tx.object(value)
+  ),
+  sharedObjectRef: (...args) => (tx) => tx.sharedObjectRef(...args),
+  objectRef: (...args) => (tx) => tx.objectRef(...args),
+  receivingRef: (...args) => (tx) => tx.receivingRef(...args)
+};
+//# sourceMappingURL=Arguments.js.map

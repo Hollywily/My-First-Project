@@ -16,13 +16,17 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var multisig_exports = {};
-__export(multisig_exports, {
-  MultiSigPublicKey: () => import_publickey.MultiSigPublicKey,
-  MultiSigSigner: () => import_signer.MultiSigSigner,
-  parsePartialSignatures: () => import_publickey.parsePartialSignatures
+var hash_exports = {};
+__export(hash_exports, {
+  hashTypedData: () => hashTypedData
 });
-module.exports = __toCommonJS(multisig_exports);
-var import_signer = require("./signer.js");
-var import_publickey = require("./publickey.js");
-//# sourceMappingURL=index.js.map
+module.exports = __toCommonJS(hash_exports);
+var import_blake2b = require("@noble/hashes/blake2b");
+function hashTypedData(typeTag, data) {
+  const typeTagBytes = Array.from(`${typeTag}::`).map((e) => e.charCodeAt(0));
+  const dataWithTag = new Uint8Array(typeTagBytes.length + data.length);
+  dataWithTag.set(typeTagBytes);
+  dataWithTag.set(data, typeTagBytes.length);
+  return (0, import_blake2b.blake2b)(dataWithTag, { dkLen: 32 });
+}
+//# sourceMappingURL=hash.js.map

@@ -18,29 +18,49 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var utils_exports = {};
 __export(utils_exports, {
-  toBigEndianBytes: () => toBigEndianBytes,
-  toPaddedBigEndianBytes: () => toPaddedBigEndianBytes
+  extractMutableReference: () => extractMutableReference,
+  extractReference: () => extractReference,
+  extractStructTag: () => extractStructTag,
+  getIdFromCallArg: () => getIdFromCallArg
 });
 module.exports = __toCommonJS(utils_exports);
-var import_utils = require("@noble/hashes/utils");
-function findFirstNonZeroIndex(bytes) {
-  for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] !== 0) {
-      return i;
+var import_sui_types = require("../utils/sui-types.js");
+function extractMutableReference(normalizedType) {
+  return typeof normalizedType === "object" && "MutableReference" in normalizedType ? normalizedType.MutableReference : void 0;
+}
+function extractReference(normalizedType) {
+  return typeof normalizedType === "object" && "Reference" in normalizedType ? normalizedType.Reference : void 0;
+}
+function extractStructTag(normalizedType) {
+  if (typeof normalizedType === "object" && "Struct" in normalizedType) {
+    return normalizedType;
+  }
+  const ref = extractReference(normalizedType);
+  const mutRef = extractMutableReference(normalizedType);
+  if (typeof ref === "object" && "Struct" in ref) {
+    return ref;
+  }
+  if (typeof mutRef === "object" && "Struct" in mutRef) {
+    return mutRef;
+  }
+  return void 0;
+}
+function getIdFromCallArg(arg) {
+  if (typeof arg === "string") {
+    return (0, import_sui_types.normalizeSuiAddress)(arg);
+  }
+  if (arg.Object) {
+    if (arg.Object.ImmOrOwnedObject) {
+      return (0, import_sui_types.normalizeSuiAddress)(arg.Object.ImmOrOwnedObject.objectId);
     }
+    if (arg.Object.Receiving) {
+      return (0, import_sui_types.normalizeSuiAddress)(arg.Object.Receiving.objectId);
+    }
+    return (0, import_sui_types.normalizeSuiAddress)(arg.Object.SharedObject.objectId);
   }
-  return -1;
-}
-function toPaddedBigEndianBytes(num, width) {
-  const hex = num.toString(16);
-  return (0, import_utils.hexToBytes)(hex.padStart(width * 2, "0").slice(-width * 2));
-}
-function toBigEndianBytes(num, width) {
-  const bytes = toPaddedBigEndianBytes(num, width);
-  const firstNonZeroIndex = findFirstNonZeroIndex(bytes);
-  if (firstNonZeroIndex === -1) {
-    return new Uint8Array([0]);
+  if (arg.UnresolvedObject) {
+    return (0, import_sui_types.normalizeSuiAddress)(arg.UnresolvedObject.objectId);
   }
-  return bytes.slice(firstNonZeroIndex);
+  return void 0;
 }
 //# sourceMappingURL=utils.js.map
