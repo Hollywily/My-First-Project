@@ -15,22 +15,59 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __reExport = (target, mod, secondTarget) => (__copyProps(target, mod, "default"), secondTarget && __copyProps(secondTarget, mod, "default"));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var client_exports = {};
-__export(client_exports, {
-  JsonRpcError: () => import_errors.JsonRpcError,
-  SuiClient: () => import_client.SuiClient,
-  SuiHTTPStatusError: () => import_errors.SuiHTTPStatusError,
-  SuiHTTPTransport: () => import_http_transport.SuiHTTPTransport,
-  SuiHTTPTransportError: () => import_errors.SuiHTTPTransportError,
-  getFullnodeUrl: () => import_network.getFullnodeUrl,
-  isSuiClient: () => import_client.isSuiClient
+var bcs_exports = {};
+__export(bcs_exports, {
+  BcsType: () => import_bcs3.BcsType,
+  TypeTagSerializer: () => import_type_tag_serializer.TypeTagSerializer,
+  bcs: () => suiBcs
 });
-module.exports = __toCommonJS(client_exports);
-var import_http_transport = require("./http-transport.js");
-var import_network = require("./network.js");
-__reExport(client_exports, require("./types/index.js"), module.exports);
-var import_client = require("./client.js");
-var import_errors = require("./errors.js");
+module.exports = __toCommonJS(bcs_exports);
+var import_bcs = require("@mysten/bcs");
+var import_bcs2 = require("./bcs.js");
+var import_effects = require("./effects.js");
+var import_type_tag_serializer = require("./type-tag-serializer.js");
+var import_bcs3 = require("@mysten/bcs");
+const suiBcs = {
+  ...import_bcs.bcs,
+  U8: import_bcs.bcs.u8(),
+  U16: import_bcs.bcs.u16(),
+  U32: import_bcs.bcs.u32(),
+  U64: import_bcs.bcs.u64(),
+  U128: import_bcs.bcs.u128(),
+  U256: import_bcs.bcs.u256(),
+  ULEB128: import_bcs.bcs.uleb128(),
+  Bool: import_bcs.bcs.bool(),
+  String: import_bcs.bcs.string(),
+  Address: import_bcs2.Address,
+  AppId: import_bcs2.AppId,
+  Argument: import_bcs2.Argument,
+  CallArg: import_bcs2.CallArg,
+  CompressedSignature: import_bcs2.CompressedSignature,
+  GasData: import_bcs2.GasData,
+  Intent: import_bcs2.Intent,
+  IntentMessage: import_bcs2.IntentMessage,
+  IntentScope: import_bcs2.IntentScope,
+  IntentVersion: import_bcs2.IntentVersion,
+  MultiSig: import_bcs2.MultiSig,
+  MultiSigPkMap: import_bcs2.MultiSigPkMap,
+  MultiSigPublicKey: import_bcs2.MultiSigPublicKey,
+  ObjectArg: import_bcs2.ObjectArg,
+  ObjectDigest: import_bcs2.ObjectDigest,
+  ProgrammableMoveCall: import_bcs2.ProgrammableMoveCall,
+  ProgrammableTransaction: import_bcs2.ProgrammableTransaction,
+  PublicKey: import_bcs2.PublicKey,
+  SenderSignedData: import_bcs2.SenderSignedData,
+  SenderSignedTransaction: import_bcs2.SenderSignedTransaction,
+  SharedObjectRef: import_bcs2.SharedObjectRef,
+  StructTag: import_bcs2.StructTag,
+  SuiObjectRef: import_bcs2.SuiObjectRef,
+  Command: import_bcs2.Command,
+  TransactionData: import_bcs2.TransactionData,
+  TransactionDataV1: import_bcs2.TransactionDataV1,
+  TransactionExpiration: import_bcs2.TransactionExpiration,
+  TransactionKind: import_bcs2.TransactionKind,
+  TypeTag: import_bcs2.TypeTag,
+  TransactionEffects: import_effects.TransactionEffects
+};
 //# sourceMappingURL=index.js.map
